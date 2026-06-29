@@ -1,11 +1,19 @@
-# Dokploy (Swarm/compose) deployment for the Contabo VPS (217.216.84.215).
-# Two services share the /data volume: the REST API and the autonomous maintainer.
-# Mirrors the ocr-docs Traefik/letsencrypt pattern.
+# Dokploy deployment for the Contabo VPS (217.216.84.215). Deploy as "Docker Compose"
+# (NOT Stack): this file uses build: and top-level service labels, which the compose
+# provider honors. Served publicly at https://venezuel.help (+ www) via Dokploy's Traefik.
 #
-# BEFORE FIRST START: seed the volume with the resolved DB (it is PII + gitignored,
-# never baked into the image):  deploy/seed-data.sh out/directorio.db directorio_data
-# (run on the VPS against the same engine Dokploy uses). Otherwise the API serves an
-# empty index until the maintainer rebuilds it from the VR API.
+# Two services share the /data volume: the REST API and the autonomous maintainer.
+#
+# NETWORKS:
+#   dokploy-network (external, attachable overlay): Dokploy's Traefik docker provider only
+#     discovers containers on THIS network, so the api must join it or it is never routed.
+#   internal (private bridge): maintainer -> api admin reload by service name, off the shared
+#     network so the `api` alias can't collide with another Dokploy app's `api`.
+#
+# BEFORE/AFTER FIRST DEPLOY: seed the volume with the resolved DB (it is PII + gitignored,
+# never baked into the image). After the first deploy creates the volume, run on the VPS:
+#   deploy/seed-data.sh /root/directorio-seed/directorio.db <project>_directorio_data
+# Otherwise the API serves an empty index until the maintainer rebuilds it from the VR API.
 # .env must include FIRECRAWL_API_KEY/FIRECRAWL_API_URL (see deploy/.env.example) or
 # the firecrawl-driven scraping degrades to plain GET.
 #
@@ -26,6 +34,9 @@ services:
       - DATA_DIR=/data
     volumes:
       - directorio_data:/data
+    networks:
+      - internal
+      - dokploy-network
     # --proxy-headers + trust-all-proxies: container is only reachable via Traefik, so
     # honoring X-Forwarded-* gives the real client IP to the rate-limit/audit guard.
     command: ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8080",
@@ -33,10 +44,18 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.directorio.rule=Host(`directorio.example.com`)"
-      - "traefik.http.routers.directorio.entrypoints=websecure"
-      - "traefik.http.routers.directorio.tls.certresolver=letsencrypt"
-      - "traefik.http.services.directorio.loadbalancer.server.port=8080"
+      # api is multi-homed; tell Traefik to reach it over the shared overlay.
+      - "traefik.docker.network=dokploy-network"
+      # HTTPS router (apex + www), Let's Encrypt via Dokploy's resolver.
+      - "traefik.http.routers.quakereunite.rule=Host(`venezuel.help`) || Host(`www.venezuel.help`)"
+      - "traefik.http.routers.quakereunite.entrypoints=websecure"
+      - "traefik.http.routers.quakereunite.tls.certresolver=letsencrypt"
+      - "traefik.http.services.quakereunite.loadbalancer.server.port=8080"
+      # Plain HTTP -> redirect to HTTPS (ACME http-challenge still served by Traefik first).
+      - "traefik.http.routers.quakereunite-web.rule=Host(`venezuel.help`) || Host(`www.venezuel.help`)"
+      - "traefik.http.routers.quakereunite-web.entrypoints=web"
+      - "traefik.http.routers.quakereunite-web.middlewares=quakereunite-redirect"
+      - "traefik.http.middlewares.quakereunite-redirect.redirectscheme.scheme=https"
 
   maintainer:
     build:
@@ -49,10 +68,18 @@ services:
       - API_RELOAD_URL=http://api:8080/admin/reload
     volumes:
       - directorio_data:/data
+    networks:
+      - internal
     command: ["python", "maintainer/loop.py", "--loop", "--interval", "600"]
     restart: unless-stopped
     depends_on:
       - api
+
+networks:
+  dokploy-network:
+    external: true
+  internal:
+    driver: bridge
 
 volumes:
   directorio_data:
