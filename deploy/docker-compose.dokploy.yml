@@ -55,20 +55,13 @@ services:
     command: ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8080",
               "--proxy-headers", "--forwarded-allow-ips", "*"]
     restart: unless-stopped
+    # Routing + HTTPS are managed in the Dokploy UI (api service "Domains" tab):
+    #   Host=venezuel.help, Path=/, Container Port=8080, HTTPS=on (Let's Encrypt); add www too.
+    # We keep only enable + the network hint so Dokploy's generated router can reach this
+    # multi-homed container over the shared overlay (it is on both internal and dokploy-network).
     labels:
       - "traefik.enable=true"
-      # api is multi-homed; tell Traefik to reach it over the shared overlay.
       - "traefik.docker.network=dokploy-network"
-      # HTTPS router (apex + www), Let's Encrypt via Dokploy's resolver.
-      - "traefik.http.routers.quakereunite.rule=Host(`venezuel.help`) || Host(`www.venezuel.help`)"
-      - "traefik.http.routers.quakereunite.entrypoints=websecure"
-      - "traefik.http.routers.quakereunite.tls.certresolver=letsencrypt"
-      - "traefik.http.services.quakereunite.loadbalancer.server.port=8080"
-      # Plain HTTP -> redirect to HTTPS (ACME http-challenge still served by Traefik first).
-      - "traefik.http.routers.quakereunite-web.rule=Host(`venezuel.help`) || Host(`www.venezuel.help`)"
-      - "traefik.http.routers.quakereunite-web.entrypoints=web"
-      - "traefik.http.routers.quakereunite-web.middlewares=quakereunite-redirect"
-      - "traefik.http.middlewares.quakereunite-redirect.redirectscheme.scheme=https"
 
   maintainer:
     build:
