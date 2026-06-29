@@ -27,6 +27,9 @@ that into one index that a family can search once.
 * Serves a 3D affected-buildings map, a 2D map, and an offline search page, plus a plain-language
   question endpoint and a health dashboard.
 
+  <img width="2546" height="1293" alt="image" src="https://github.com/user-attachments/assets/e35866df-3401-4a57-b193-4fd5ba0b21af" />
+
+
 ## How Gemma on Cerebras powers a live ingestion pipeline
 
 This is the core of the project. It is a high-volume, always-on pipeline, not a one-time import.
