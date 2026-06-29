@@ -48,6 +48,16 @@ APP_ROOT = Path(__file__).resolve().parent.parent
 
 @app.get("/", include_in_schema=False)
 def home():
+    # Landing page = 3D affected-buildings map (baked into the image). The self-contained
+    # search/list page now lives at /buscador.
+    f = APP_ROOT / "web" / "mapa3d.html"
+    if f.exists():
+        return FileResponse(str(f), media_type="text/html")
+    return HTMLResponse("<h1>mapa3d.html no encontrado</h1>", status_code=503)
+
+
+@app.get("/buscador", include_in_schema=False)
+def buscador():
     f = WEB_DIR / "buscador.html"
     if f.exists():
         return FileResponse(str(f), media_type="text/html")
