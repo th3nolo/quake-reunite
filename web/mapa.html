@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa · Directorio Sismo Venezuela 2026</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<style>
+:root{--bg:#0f1115;--card:#181b22;--line:#272b35;--txt:#e8eaed;--mut:#9aa0aa;--accent:#3b82f6;
+ --ok:#22c55e;--warn:#f59e0b;--dead:#9ca3af;--hosp:#3b82f6;}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:15px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+#app{display:flex;height:100vh}
+#side{width:380px;max-width:42vw;display:flex;flex-direction:column;border-right:1px solid var(--line);min-width:300px}
+#map{flex:1}
+header{padding:12px 14px;border-bottom:1px solid var(--line)}
+h1{font-size:16px;margin:0}
+.sub{color:var(--mut);font-size:12px;margin-top:2px}
+.chat{padding:12px 14px;border-bottom:1px solid var(--line)}
+.chat form{display:flex;gap:6px}
+.chat input{flex:1;background:#0c0e12;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 11px;font-size:14px}
+.chat button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:0 14px;font-weight:600;cursor:pointer}
+.hint{color:var(--mut);font-size:11px;margin-top:6px}
+.hint b{color:var(--txt)}
+.answer{margin:10px 0 0;padding:10px;background:var(--card);border:1px solid var(--line);border-radius:8px;white-space:pre-wrap;font-size:13px}
+.src{margin-top:6px;font-size:11px;color:var(--mut)}
+.src .tag{display:inline-block;background:#13203f;border:1px solid #2a47a0;color:#9db8ff;border-radius:999px;padding:1px 7px;margin:2px 3px 0 0}
+#results{flex:1;overflow:auto;padding:6px 14px 14px}
+.r{padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.r:hover{background:#13161c}
+.r .n{font-weight:600;font-size:14px}
+.r .m{color:var(--mut);font-size:12px;margin-top:2px}
+.b{font-size:10px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);margin-right:4px}
+.b.loc{background:#16261c;border-color:#1f5132;color:#7ee2a8}
+.b.bus{background:#241d10;border-color:#5b4620;color:#f0c879}
+.b.ing{background:#13203f;border-color:#2a47a0;color:#9db8ff}
+.b.dead{background:#241016;border-color:#5b2030;color:#f3a8b8}
+.b.ctr{background:#1c2410;border-color:#46531f;color:#cfe879}
+.toolbar{padding:8px 14px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;font-size:12px;color:var(--mut)}
+.toolbar label{cursor:pointer;user-select:none}
+.legend{font-size:11px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px -1px 0}
+details{padding:10px 14px;border-top:1px solid var(--line);font-size:12px}
+summary{cursor:pointer;color:var(--mut)}
+pre{background:#0c0e12;border:1px solid var(--line);border-radius:6px;padding:8px;overflow:auto;font-size:11px;color:#cdd3dd}
+a{color:#9db8ff}
+.leaflet-popup-content{font:13px/1.4 system-ui;margin:8px 10px}
+@media(max-width:760px){#app{flex-direction:column}#side{width:100%;max-width:100%;height:55%}#map{height:45%}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <header>
+      <h1>Directorio Sismo Venezuela 2026</h1>
+      <div class="sub">Búsqueda con IA · personas y centros de acopio en el mapa</div>
+    </header>
+    <div class="chat">
+      <form id="f">
+        <input id="q" placeholder="Ej: ¿dónde está Gabriela Rodríguez? · centros con insulina en Catia La Mar" autocomplete="off" autofocus>
+        <button>Buscar</button>
+      </form>
+      <div class="hint">Pregunta en español. La IA consulta el índice y <b>otras fuentes</b> cuando hace falta.</div>
+      <div id="answer"></div>
+    </div>
+    <div class="toolbar">
+      <label><input type="checkbox" id="showCenters"> Mostrar centros de acopio</label>
+      <span class="legend"><span class="dot" style="background:#f59e0b"></span>Por localizar
+        <span class="dot" style="background:#22c55e"></span>Localizado
+        <span class="dot" style="background:#3b82f6"></span>Hospital
+        <span class="dot" style="background:#cfe879"></span>Centro</span>
+    </div>
+    <div id="results"></div>
+    <details>
+      <summary>Consumir la API (para desarrolladores)</summary>
+      <p>API pública, JSON. Documentación: <a href="/docs" target="_blank">/docs</a></p>
+<pre>
+# Buscar una persona
+curl "{ORIGIN}/persons?name=rodriguez&limit=5"
+
+# Pregunta en lenguaje natural (IA + fuentes externas)
+curl "{ORIGIN}/ask?q=donde%20esta%20Gabriela%20Rodriguez"
+
+# Centros con una necesidad, cerca de un punto
+curl "{ORIGIN}/centers?need=medicinas&near=10.60,-67.01&radius_km=15"
+</pre>
+<pre>
+// JS
+const r = await fetch("{ORIGIN}/ask?q=" + encodeURIComponent(pregunta));
+const data = await r.json();   // {answer, results:[...], checked}
+</pre>
+    </details>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+const API = location.origin;
+document.querySelectorAll('pre').forEach(p=>p.textContent=p.textContent.split('{ORIGIN}').join(API));
+const map = L.map('map',{zoomControl:true}).setView([10.58,-66.90],10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+
+const STC={por_localizar:'#f59e0b',localizado:'#22c55e',ingresado:'#3b82f6',
+           herido:'#3b82f6',alta:'#22c55e',fallecido:'#9ca3af'};
+const STLABEL={por_localizar:'Por localizar',localizado:'Localizado / a salvo',
+  ingresado:'Ingresado (hospital)',herido:'Herido',alta:'De alta',fallecido:'Fallecido'};
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const gdir=d=>'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(d);
+const gsee=q=>'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q);
+const dirHtml=(dest,seeQ)=>`<br><a target="_blank" rel="noopener" href="${gdir(dest)}">Cómo llegar</a> · <a target="_blank" rel="noopener" href="${gsee(seeQ)}">Ver / fotos</a>`;
+function jit(v){return v + (Math.random()-0.5)*0.012;}  // spread pins sharing a zone centroid
+
+// ---- overview: per-zone people counts ----
+let zoneLayer = L.layerGroup().addTo(map);
+fetch(API+'/map/zones').then(r=>r.json()).then(d=>{
+  (d.zones||[]).forEach(z=>{
+    const dom = Object.entries(z.by_status||{}).sort((a,b)=>b[1]-a[1])[0];
+    const color = STC[dom?dom[0]:'']||'#9aa0aa';
+    const rad = Math.min(38, 7+Math.sqrt(z.total)*1.7);
+    const rows = Object.entries(z.by_status||{}).sort((a,b)=>b[1]-a[1])
+      .map(([s,n])=>`${STLABEL[s]||s}: <b>${n}</b>`).join('<br>');
+    L.circleMarker([z.lat,z.lng],{radius:rad,color:color,weight:1,fillColor:color,fillOpacity:.35})
+      .bindPopup(`<b>${esc(z.zone)}</b><br>Total: <b>${z.total}</b><br>${rows}`)
+      .addTo(zoneLayer);
+  });
+}).catch(()=>{});
+
+// ---- centers layer (toggle) ----
+let centersCluster=null;
+document.getElementById('showCenters').addEventListener('change',e=>{
+  if(e.target.checked){
+    if(!centersCluster){
+      centersCluster=L.markerClusterGroup();
+      fetch(API+'/centers?limit=500').then(r=>r.json()).then(d=>{
+        (d.results||[]).forEach(c=>{
+          if(c.lat==null)return;
+          const needs=(c.needs_tags||[]).join(', ')||esc(c.needs||'');
+          centersCluster.addLayer(L.circleMarker([c.lat,c.lng],
+            {radius:6,color:'#cfe879',weight:1,fillColor:'#cfe879',fillOpacity:.8})
+            .bindPopup(`<b>${esc(c.name)}</b><br>${esc(c.municipality||'')}<br>Necesita: ${esc(needs)||'—'}<br>Estado: ${esc(c.status||'—')} · ${esc(c.freshness||'')}`
+              +dirHtml(c.lat+','+c.lng, (c.name||'')+', '+(c.municipality||'')+', Venezuela')));
+        });
+        map.addLayer(centersCluster);
+      });
+    } else map.addLayer(centersCluster);
+  } else if(centersCluster) map.removeLayer(centersCluster);
+});
+
+// ---- search / chat ----
+let resultLayer=L.layerGroup().addTo(map);
+const A=document.getElementById('answer'), R=document.getElementById('results');
+
+function personCard(p){
+  const st=(p.statuses||[]); let cls='bus',lab='Por localizar';
+  if(p.deceased||st.includes('fallecido')){cls='dead';lab='Fallecido';}
+  else if(st.includes('localizado')){cls='loc';lab='Localizado / a salvo';}
+  else if(st.includes('ingresado')){cls='ing';lab='Ingresado (hospital)';}
+  else if(st.includes('por_localizar')){cls='bus';lab='Por localizar';}
+  const ci=(p.all_ci&&p.all_ci.length)?('CI '+p.all_ci.join(' / ')):'sin cédula';
+  const org=(p.origins||[])[0]||'';
+  const hosp=(p.hospitals||[])[0]||'';
+  const hlink=hosp?`<br>🏥 ${esc(hosp)}`+dirHtml(hosp+', Venezuela',hosp+', Venezuela'):'';
+  return {html:`<div class="n">${esc(p.display_name)}</div>
+    <div class="m"><span class="b ${cls}">${lab}</span>${esc(p.person_id)} · ${esc(ci)}${org?(' · '+esc(org)):''}</div>`,
+    lat:p.lat,lng:p.lng,pop:`<b>${esc(p.display_name)}</b><br><span style="color:#666">${lab}</span><br>${esc(ci)}<br>${esc(org)}${hlink}`,cls};
+}
+function centerCard(c){
+  return {html:`<div class="n">${esc(c.name)}</div>
+    <div class="m"><span class="b ctr">Centro</span>${esc(c.municipality||'')} · ${esc(c.needs||'')}</div>`,
+    lat:c.lat,lng:c.lng,pop:`<b>${esc(c.name)}</b><br>${esc(c.municipality||'')}<br>Necesita: ${esc(c.needs||'—')}`
+      +(c.lat!=null?dirHtml(c.lat+','+c.lng,(c.name||'')+', '+(c.municipality||'')+', Venezuela'):''),cls:'ctr'};
+}
+
+document.getElementById('f').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const q=document.getElementById('q').value.trim(); if(q.length<2)return;
+  A.innerHTML='<div class="answer">Buscando… (consultando el índice y otras fuentes)</div>';
+  R.innerHTML=''; resultLayer.clearLayers();
+  let d; try{ d=await (await fetch(API+'/ask?q='+encodeURIComponent(q))).json(); }
+  catch(err){ A.innerHTML='<div class="answer">Error de conexión.</div>'; return; }
+  let src='';
+  const chk=d.checked||{};
+  if(chk.sources) src='Consultamos: '+chk.sources.map(s=>`<span class="tag">${esc(String(s).split(':')[0])}</span>`).join('');
+  else if(chk.centers_refresh) src='<span class="tag">fuentes de centros actualizadas</span>';
+  A.innerHTML=`<div class="answer">${esc(d.answer||'(sin respuesta)')}</div>`+(src?`<div class="src">${src}</div>`:'');
+  const isCenters=(d.query||{}).tool==='centers';
+  const cards=(d.results||[]).map(x=>isCenters?centerCard(x):personCard(x));
+  const pts=[];
+  cards.forEach(c=>{
+    const div=document.createElement('div'); div.className='r'; div.innerHTML=c.html; R.appendChild(div);
+    if(c.lat!=null){
+      const la=isCenters?c.lat:jit(c.lat), ln=isCenters?c.lng:jit(c.lng);
+      const col=({loc:'#22c55e',bus:'#f59e0b',ing:'#3b82f6',dead:'#9ca3af',ctr:'#cfe879'})[c.cls]||'#9db8ff';
+      const mk=L.circleMarker([la,ln],{radius:7,color:col,weight:1,fillColor:col,fillOpacity:.85})
+        .bindPopup(c.pop).addTo(resultLayer);
+      pts.push([la,ln]); div.onclick=()=>{map.setView([la,ln],14);mk.openPopup();};
+    }
+  });
+  if(pts.length){ zoneLayer.remove(); map.fitBounds(pts,{maxZoom:13,padding:[40,40]}); }
+  else { if(!map.hasLayer(zoneLayer))zoneLayer.addTo(map); }
+  const plotted=pts.length, total=(d.results||[]).length;
+  if(total) R.insertAdjacentHTML('afterbegin',
+    `<div class="m" style="padding:6px 0">${total} resultado(s)${plotted<total?` · ${plotted} en el mapa (resto sin ubicación)`:''}</div>`);
+});
+</script>
+</body>
+</html>

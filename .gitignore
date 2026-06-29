@@ -1,0 +1,26 @@
+# secrets
+.env
+*.env
+**/.env
+*.key
+.cerebras_key
+.mistral_key
+
+# PII / generated data — NEVER commit (real cédulas, names, health status, photos)
+out/
+ingest/out/
+data/
+SISMO 2026 VZLA/
+/markdown
+.firecrawl/
+
+# python / misc
+__pycache__/
+**/__pycache__/
+*.pyc
+*.log
+.venv/
+venv/
+
+# Understand-Anything generated graph
+.understand-anything/

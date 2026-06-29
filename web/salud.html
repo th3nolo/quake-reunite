@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Observabilidad · Directorio Sismo 2026</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--line:#272b35;--txt:#e8eaed;--mut:#9aa0aa;--ok:#22c55e;--warn:#f59e0b;--acc:#3b82f6;--bad:#f3a8b8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif;padding:18px}
+h1{font-size:18px;margin:0 0 2px}.sub{color:var(--mut);font-size:13px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.k{color:var(--mut);font-size:12px}.v{font-size:24px;font-weight:700;margin-top:3px}
+.d{font-size:12px;margin-top:4px}.up{color:var(--ok)}.dn{color:var(--bad)}.flat{color:var(--mut)}
+h2{font-size:14px;margin:18px 0 8px;color:var(--mut)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left;color:var(--mut)}
+.win{background:#101826;border:1px solid #1f3050;border-radius:10px;padding:12px 14px;margin-bottom:16px}
+a{color:#9db8ff}
+</style>
+</head>
+<body>
+<h1>Observabilidad — Directorio Sismo 2026</h1>
+<div class="sub">Estado actual del índice y cuánto cambió en cada ciclo de sincronización. <a href="/mapa3d">mapa 3D</a> · <a href="/">lista</a></div>
+<div class="sub" id="upd">cargando…</div>
+
+<div class="grid" id="now"></div>
+<div class="win" id="win"></div>
+<h2>Ciclos recientes del motor de sincronización</h2>
+<table id="tbl"><thead><tr><th>hora (UTC)</th><th>personas</th><th>por localizar</th><th>localizados</th><th>hospital</th><th>fallecidos</th><th>centros</th><th>cambió</th></tr></thead><tbody></tbody></table>
+
+<script>
+const API=location.origin;
+const card=(k,v,d)=>`<div class="card"><div class="k">${k}</div><div class="v">${(v||0).toLocaleString('es')}</div>${d||''}</div>`;
+const delta=n=>n>0?`<div class="d up">▲ +${n}</div>`:n<0?`<div class="d dn">▼ ${n}</div>`:`<div class="d flat">— sin cambio</div>`;
+const pad=n=>String(n).padStart(2,'0');
+
+async function load(){
+  try{
+    const [s,h]=await Promise.all([
+      fetch(API+'/stats').then(r=>r.json()),
+      fetch(API+'/stats/history').then(r=>r.json())]);
+    const by=s.by_status||{}, ch=h.change_over_window||{}, cy=h.cycles||[];
+    document.getElementById('now').innerHTML =
+      card('Personas', s.persons, delta(ch.persons||0)) +
+      card('Por localizar', by.por_localizar||0, delta(ch.por_localizar||0)) +
+      card('Localizados / a salvo', by.localizado||0, delta(ch.localizado||0)) +
+      card('En hospital', by.ingresado||0, delta(ch.ingresado||0)) +
+      card('Fallecidos', by.deceased!=null?by.deceased:(s.deceased||0), delta(ch.deceased||0)) +
+      card('Centros de acopio', s.centers, delta(ch.centers||0));
+    document.getElementById('win').innerHTML = (ch.ciclos>1)
+      ? `<b>Cambios acumulados</b> en ${ch.ciclos} ciclos (${ch.desde} → ${ch.hasta}): `+
+        `<b class="up">+${ch.persons} personas</b>, <b class="up">+${ch.localizado} localizados</b>, `+
+        `+${ch.ingresado} en hospital, ${ch.por_localizar>=0?'+':''}${ch.por_localizar} por localizar, `+
+        `+${ch.deceased} fallecidos, +${ch.records} registros.`
+      : `El motor apenas arrancó (${cy.length} ciclo${cy.length==1?'':'s'} registrado${cy.length==1?'':'s'}). `+
+        `Los cambios aparecen al acumularse más ciclos — el motor registra uno cada ~10 min, y trae datos nuevos de Venezuela Reporta cada ~hora.`;
+    const tb=document.querySelector('#tbl tbody'); tb.innerHTML='';
+    cy.slice(0,40).forEach(c=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${(c.ts||'').replace('T',' ').replace('Z','')}</td><td>${c.persons}</td><td>${c.por_localizar}</td>`+
+        `<td>${c.localizado}</td><td>${c.ingresado}</td><td>${c.deceased}</td><td>${c.centers}</td><td>${c.changed?'sí':'—'}</td>`;
+      tb.appendChild(tr);
+    });
+    const n=new Date(), last=cy[0]?cy[0].ts.replace('T',' ').replace('Z',' UTC'):'—';
+    document.getElementById('upd').innerHTML=
+      `Página refrescada ${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())} `+
+      `· se actualiza sola cada 20s · el motor registra un ciclo cada ~10 min · último ciclo: <b>${last}</b> · ${cy.length} ciclos totales`;
+  }catch(e){
+    document.getElementById('upd').innerHTML=`<span style="color:#f3a8b8">No se pudo cargar los datos (${e.message}). ¿La API está encendida en ${API}? Revisa /stats</span>`;
+  }
+}
+load();
+setInterval(load, 20000);
+</script>
+</body>
+</html>

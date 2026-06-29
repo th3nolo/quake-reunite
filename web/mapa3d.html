@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa 3D · Edificios afectados · Sismo La Guaira 2026</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+:root{--bg:#0b0d11;--card:#161a22;--line:#272b35;--txt:#e8eaed;--mut:#9aa0aa;--accent:#3b82f6}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:15px/1.45 system-ui,Segoe UI,Roboto,sans-serif;overflow:hidden}
+#map{position:absolute;inset:0}
+.panel{position:absolute;z-index:5;background:rgba(18,21,28,.92);border:1px solid var(--line);border-radius:10px;backdrop-filter:blur(6px)}
+#top{top:12px;left:12px;right:12px;max-width:420px;padding:12px 14px}
+#top h1{font-size:15px;margin:0 0 2px}
+#top .sub{color:var(--mut);font-size:12px}
+#f{display:flex;gap:6px;margin-top:9px}
+#q{flex:1;background:#0c0e12;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 10px;font-size:13px}
+#f button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:0 12px;font-weight:600;cursor:pointer}
+#reset{margin-top:8px;background:#222733;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
+#reset:hover{background:#2b3242}
+#ans{margin-top:8px;font-size:13px;max-height:34vh;overflow:auto}
+.answer{white-space:pre-wrap;background:#0c0e12;border:1px solid var(--line);border-radius:8px;padding:8px}
+.src{color:var(--mut);font-size:11px;margin-top:5px}
+.tag{display:inline-block;background:#13203f;border:1px solid #2a47a0;color:#9db8ff;border-radius:999px;padding:1px 7px;margin:2px 3px 0 0}
+.r{padding:6px 0;border-bottom:1px solid var(--line);cursor:pointer;font-size:12px}
+.r:hover{color:#fff}.r b{font-size:13px}
+.pill{font-size:10px;padding:1px 6px;border-radius:999px;border:1px solid var(--line);margin-right:5px}
+.t1{background:#16261c;border-color:#1f5132;color:#7ee2a8}
+.t2{background:#241d10;border-color:#5b4620;color:#f0c879}
+.t3{background:#241016;border-color:#5b2030;color:#f3a8b8}
+#legend{bottom:12px;left:12px;padding:10px 12px;font-size:12px}
+#legend .row{display:flex;align-items:center;gap:7px;margin:3px 0}
+.sw{width:14px;height:10px;border-radius:2px;display:inline-block}
+#legend .lk{color:var(--mut);font-size:11px;margin-top:6px}
+a{color:#9db8ff}
+#place{position:absolute;top:12px;right:12px;width:340px;max-width:46vw;z-index:7;display:none;overflow:hidden}
+#place-hd{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
+#place-name{font-weight:600;font-size:14px;line-height:1.25}
+#place-x{background:none;border:0;color:var(--mut);font-size:16px;cursor:pointer}
+#place-map{width:100%;height:230px;border:0;display:block;background:#0c0e12}
+#place-actions{display:flex;gap:8px;padding:10px 12px}
+#place-actions a{flex:1;text-align:center;background:var(--accent);color:#fff;border-radius:8px;padding:9px;text-decoration:none;font-size:13px;font-weight:600}
+#place-actions a.alt{background:#222733;color:var(--txt);border:1px solid var(--line)}
+#place-note{padding:0 12px 12px;color:var(--mut);font-size:12px}
+.note{color:var(--mut);font-size:11px;margin-top:6px}
+.maplibregl-popup-content{background:#161a22;color:#e8eaed;border:1px solid #272b35;border-radius:8px;font:13px/1.4 system-ui}
+.maplibregl-popup-tip{border-top-color:#161a22!important;border-bottom-color:#161a22!important}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="place" class="panel">
+  <div id="place-hd"><span id="place-name"></span><button id="place-x" title="cerrar">✕</button></div>
+  <iframe id="place-map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+  <div id="place-actions">
+    <a id="place-dir" target="_blank" rel="noopener">➤ Cómo llegar</a>
+    <a id="place-open" class="alt" target="_blank" rel="noopener">Ver fotos / info</a>
+  </div>
+  <div id="place-note"></div>
+</div>
+
+<div id="top" class="panel">
+  <h1>Edificios afectados — Sismo La Guaira, 24 jun 2026</h1>
+  <div class="sub">9.128 edificios evaluados · altura y color = nivel de daño · terreno 3D real</div>
+  <form id="f"><input id="q" placeholder="Busca una persona: ¿dónde está Gabriela Rodríguez?" autocomplete="off"><button>Buscar</button></form>
+  <div id="ans"></div>
+  <div class="note">Vista desde el mar hacia las montañas. <b>Rota</b>: clic-derecho, <b>botón central del ratón</b>, dos dedos, o la brújula ↗. Personas: por <b>edificio</b> si se conoce, si no por sector.</div>
+  <button id="reset" type="button">⟲ Vista inicial</button>
+</div>
+
+<div id="legend" class="panel">
+  <div class="row"><span class="sw" style="background:#fde047"></span>daño bajo</div>
+  <div class="row"><span class="sw" style="background:#fb923c"></span>daño medio</div>
+  <div class="row"><span class="sw" style="background:#ef4444"></span>daño alto</div>
+  <div class="lk">Personas: <span style="color:#7ee2a8">●</span> edificio exacto · <span style="color:#f0c879">●</span> sector · <span style="color:#f3a8b8">●</span> zona</div>
+  <div class="lk">Datos edificios: Microsoft AI for Good Lab / R. Franco · OSM · CARTO</div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+const API=location.origin;
+const map=new maplibregl.Map({
+  // looking SOUTH from over the sea, up toward the Ávila mountains; free-rotate enabled
+  container:'map', center:[-67.037,10.594], zoom:13.6, pitch:70, bearing:178, maxPitch:85,
+  style:{ version:8, glyphs:'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    sources:{
+      base:{type:'raster',tiles:['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OSM © CARTO'},
+      dem:{type:'raster-dem',tiles:['https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'],
+        encoding:'terrarium',tileSize:256,maxzoom:14}
+    },
+    layers:[{id:'base',type:'raster',source:'base'}]
+  }
+});
+map.addControl(new maplibregl.NavigationControl({visualizePitch:true}),'bottom-right');
+
+// right-side place panel: shows the hospital (embedded map + directions) when someone was moved there
+function openPlace(hospital, who){
+  const pl=document.getElementById('place');
+  if(!hospital){ pl.style.display='none'; return; }
+  const q=encodeURIComponent(hospital+', Venezuela');
+  document.getElementById('place-name').textContent='🏥 '+hospital;
+  document.getElementById('place-map').src='https://www.google.com/maps?q='+q+'&output=embed';
+  document.getElementById('place-dir').href='https://www.google.com/maps/dir/?api=1&destination='+q;
+  document.getElementById('place-open').href='https://www.google.com/maps/search/?api=1&query='+q;
+  document.getElementById('place-note').textContent=who?(who+' fue ubicada/o aquí (dato comunitario, confirmar).'):'';
+  pl.style.display='block';
+}
+document.getElementById('place-x').onclick=()=>document.getElementById('place').style.display='none';
+
+// reset to the initial sea->mountains view
+const HOME={center:[-67.037,10.594],zoom:13.6,pitch:70,bearing:178};
+document.getElementById('reset').onclick=()=>map.easeTo({...HOME,duration:900});
+
+// middle mouse button (wheel-click) drag: horizontal = rotate, vertical = tilt
+let mmb=false,mx=0,my=0; const cv=map.getCanvas();
+cv.addEventListener('mousedown',e=>{if(e.button===1){mmb=true;mx=e.clientX;my=e.clientY;e.preventDefault();}});
+window.addEventListener('mousemove',e=>{if(!mmb)return;
+  const dx=e.clientX-mx,dy=e.clientY-my; mx=e.clientX; my=e.clientY;
+  map.setBearing(map.getBearing()-dx*0.5);
+  map.setPitch(Math.max(0,Math.min(85,map.getPitch()-dy*0.4)));});
+window.addEventListener('mouseup',()=>{mmb=false;});
+cv.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault();});  // no autoscroll
+
+map.on('load',()=>{
+  map.setTerrain({source:'dem',exaggeration:1.4});
+  map.setSky({'sky-color':'#0b1220','horizon-color':'#1b2a44','fog-color':'#0b0d11','sky-horizon-blend':.6,'horizon-fog-blend':.5});
+  map.addSource('edif',{type:'geojson',data:API+'/data/edificios.geojson'});
+  map.addLayer({id:'edif-3d',type:'fill-extrusion',source:'edif',filter:['==',['get','d'],1],
+    paint:{
+      'fill-extrusion-color':['interpolate',['linear'],['get','p'],0,'#fde047',.3,'#fb923c',.6,'#ef4444',1,'#b91c1c'],
+      'fill-extrusion-height':['+',6,['*',['coalesce',['get','p'],0],26]],
+      'fill-extrusion-base':0,'fill-extrusion-opacity':.9}});
+  map.on('click','edif-3d',e=>{const p=e.features[0].properties;
+    new maplibregl.Popup().setLngLat(e.lngLat)
+      .setHTML(`<b>Edificio afectado</b><br>daño estimado: ${Math.round((p.p||0)*100)}%`).addTo(map);});
+  map.on('mouseenter','edif-3d',()=>map.getCanvas().style.cursor='pointer');
+  map.on('mouseleave','edif-3d',()=>map.getCanvas().style.cursor='');
+  // people: a GeoJSON circle layer sits ON the terrain (no floating), unlike HTML markers
+  map.addSource('people',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({id:'people',type:'circle',source:'people',
+    paint:{'circle-radius':11,'circle-color':['get','color'],
+           'circle-stroke-color':'#ffffff','circle-stroke-width':3,'circle-opacity':1}});
+  map.on('click','people',e=>new maplibregl.Popup().setLngLat(e.features[0].geometry.coordinates)
+    .setHTML(e.features[0].properties.popup).addTo(map));
+  map.on('mouseenter','people',()=>map.getCanvas().style.cursor='pointer');
+  map.on('mouseleave','people',()=>map.getCanvas().style.cursor='');
+});
+
+// ---- person search overlay (terrain-anchored circle layer; cannot float) ----
+const ans=document.getElementById('ans');
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function tierColor(t){return t==='building'?'#22c55e':t==='sector'?'#f59e0b':'#f3a8b8';}
+function tierPill(t){return t==='building'?['t1','edificio']:t==='sector'?['t2','sector']:['t3','zona'];}
+const inAffected=(la,ln)=>la!=null&&la>=10.54&&la<=10.66&&ln>=-67.20&&ln<=-66.55;  // La Guaira coast (the 3D map)
+function setPeople(feats){ if(map.getSource('people')) map.getSource('people').setData({type:'FeatureCollection',features:feats}); }
+
+document.getElementById('f').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const q=document.getElementById('q').value.trim(); if(q.length<2)return;
+  ans.innerHTML='<div class="answer">Buscando… (índice + otras fuentes)</div>'; setPeople([]);
+  let d; try{ d=await (await fetch(API+'/ask?q='+encodeURIComponent(q))).json(); }
+  catch(_){ ans.innerHTML='<div class="answer">Error de conexión.</div>'; return; }
+  const chk=d.checked||{}; let src='';
+  if(chk.sources) src='Consultamos: '+chk.sources.map(s=>`<span class="tag">${esc(String(s).split(':')[0])}</span>`).join('');
+  let html=`<div class="answer">${esc(d.answer||'(sin respuesta)')}</div>`+(src?`<div class="src">${src}</div>`:'');
+  const feats=[];
+  let firstHosp=null,firstWho=null;
+  const jit=v=>v+(Math.random()-0.5)*0.004;   // ~±200m so sector-mates don't stack
+  (d.results||[]).forEach(r=>{
+    const tier=r.geo_tier||'zone';
+    let lat=r.lat, ln=r.lng;
+    if(lat!=null && tier!=='building'){ lat=jit(lat); ln=jit(ln); }
+    const name=r.display_name||r.name||''; const st=(r.statuses||[]).join(', ');
+    const org=(r.origins&&r.origins[0])||r.needs||'';
+    const [pc,pl]=tierPill(tier);
+    // if she's in a hospital, give directions to it (Google resolves the name) — for relatives
+    // arriving from other states who don't know how to get there.
+    const hosp=(r.hospitals||[])[0]||'';
+    const hq=hosp?encodeURIComponent(hosp+', Venezuela'):'';
+    const hlink=hosp?`<br>🏥 ${esc(hosp)}<br><a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${hq}">Cómo llegar</a> · <span style="color:#9aa0aa">ver panel →</span>`:'';
+    if(hosp&&!firstHosp){firstHosp=hosp;firstWho=name;}
+    const outz=(lat!=null&&!inAffected(lat,ln))?' <span style="color:#f0c879">· fuera de la zona afectada</span>':'';
+    html+=`<div class="r" data-la="${lat==null?'':lat}" data-ln="${ln==null?'':ln}" data-hosp="${esc(hosp)}" data-who="${esc(name)}"><b>${esc(name)}</b>${lat!=null?` <span class="pill ${pc}">${pl}</span>`:''}${outz}<br>${esc((r.all_ci&&r.all_ci.join('/'))||r.municipality||'')} ${esc(org)}</div>`;
+    if(lat!=null) feats.push({type:'Feature',geometry:{type:'Point',coordinates:[ln,lat]},
+      properties:{color:tierColor(tier),popup:`<b>${esc(name)}</b><br>${esc(st)}<br>${esc(org)}${hlink}`}});
+  });
+  ans.innerHTML=html;
+  setPeople(feats);
+  ans.querySelectorAll('.r').forEach(el=>el.onclick=()=>{const la=+el.dataset.la,ln=+el.dataset.ln;
+    if(la)map.flyTo({center:[ln,la],zoom:16,pitch:68});
+    if(el.dataset.hosp) openPlace(el.dataset.hosp, el.dataset.who);});
+  openPlace(firstHosp, firstWho);   // show the hospital panel automatically if someone was moved there
+  const cs=feats.map(f=>f.geometry.coordinates);
+  // one person -> frame them near top-down so the dot is unmistakable (a steep pitch buries
+  // coastal points in the foreground). Many -> fit bounds at a gentler tilt.
+  if(cs.length===1) map.flyTo({center:cs[0],zoom:17,pitch:35,duration:1200});
+  else if(cs.length>1){const b=cs.reduce((b,p)=>b.extend(p),new maplibregl.LngLatBounds(cs[0],cs[0]));
+    map.fitBounds(b,{padding:90,pitch:40,maxZoom:16,bearing:map.getBearing()});}
+});
+</script>
+</body>
+</html>

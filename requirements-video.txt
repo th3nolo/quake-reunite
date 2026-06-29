@@ -1,0 +1,6 @@
+# Optional: only needed when the `video` source (sources.yaml video_reels) is enabled.
+# extract_video.py imports faster-whisper lazily and shells out to yt-dlp + ffmpeg,
+# so the base image runs fine without these. To enable video:
+#   pip install -r requirements-video.txt   AND   apt-get install ffmpeg libgomp1
+yt-dlp>=2024.8
+faster-whisper>=1.0

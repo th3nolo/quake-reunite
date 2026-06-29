@@ -1,0 +1,64 @@
+# Source registry for the autonomous maintainer.
+# kind: pdf | photos | web_cache | web_live | video
+# cadence_min: how often to re-check. entity: person | center | mixed.
+# web_cache points at a .firecrawl/ve-resources md (refresh via firecrawl first).
+# Person registries that are SEARCH-ONLY (no bulk list) are NOT here as feeds —
+# they are cross-check targets (query by CI/name), not ingestion sources.
+
+sources:
+  # --- controllable person feeds (highest trust) ---
+  - id: sismo_pdfs
+    kind: pdf
+    path: "SISMO 2026 VZLA/SISMO 2026 VZLA"
+    entity: person
+    cadence_min: 1440
+    enabled: true
+
+  - id: sismo_photos
+    kind: photos
+    path: "SISMO 2026 VZLA/SISMO 2026 VZLA"
+    entity: person
+    cadence_min: 720
+    enabled: true
+
+  # --- web (bulk-available pages: acopio dirs + SSR registries) ---
+  - id: web_centrosacopio
+    kind: web_cache
+    path: "/home/th3nolo/.firecrawl/ve-resources/centrosacopio.md"
+    refresh_url: "https://centrosacopioterremotovenezuela.pages.dev/"
+    entity: center
+    cadence_min: 360
+    enabled: true
+
+  - id: web_reportesvenezuela
+    kind: web_cache
+    path: "/home/th3nolo/.firecrawl/ve-resources/reportesvenezuela.md"
+    refresh_url: "https://venezuelareporta.org/"
+    entity: person
+    cadence_min: 180
+    enabled: true
+
+  - id: web_acopiovzla
+    kind: web_cache
+    path: "/home/th3nolo/.firecrawl/ve-resources/acopiovzla.md"
+    refresh_url: "https://acopiovzla.com/"
+    entity: center
+    cadence_min: 720
+    enabled: true
+
+  # --- Venezuela Reporta open API (missing-person registry, ~46k) ---
+  - id: vr_api
+    kind: vr_api
+    statuses: [buscando, encontrado, a_salvo]
+    entity: person
+    cadence_min: 60
+    enabled: true
+    notes: "Open API /api/v1/personas; incremental via ?since=; attribution required; 120 req/min."
+
+  # --- video (URLs; downloaded + frame/ASR extracted) ---
+  - id: video_reels
+    kind: video
+    urls: []          # add IG/TikTok/X/YouTube reel URLs here
+    entity: person
+    cadence_min: 240
+    enabled: false    # enable once URLs are added + faster-whisper installed

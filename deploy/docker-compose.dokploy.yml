@@ -1,0 +1,58 @@
+# Dokploy (Swarm/compose) deployment for the Contabo VPS (217.216.84.215).
+# Two services share the /data volume: the REST API and the autonomous maintainer.
+# Mirrors the ocr-docs Traefik/letsencrypt pattern.
+#
+# BEFORE FIRST START: seed the volume with the resolved DB (it is PII + gitignored,
+# never baked into the image):  deploy/seed-data.sh out/directorio.db directorio_data
+# (run on the VPS against the same engine Dokploy uses). Otherwise the API serves an
+# empty index until the maintainer rebuilds it from the VR API.
+# .env must include FIRECRAWL_API_KEY/FIRECRAWL_API_URL (see deploy/.env.example) or
+# the firecrawl-driven scraping degrades to plain GET.
+#
+# dns: fast public resolvers as the embedded-DNS UPSTREAM. Service names (api/maintainer)
+# still resolve via the engine's embedded DNS; only EXTERNAL lookups (Cerebras, Firecrawl,
+# Photon, Venezuela Reporta) are forwarded here. Fixes a ~5s/lookup stall seen when the host
+# resolver is slow/unreachable from inside the container (e.g. rootless podman + WSL gateway).
+version: "3.8"
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file: .env
+    dns: ["1.1.1.1", "8.8.8.8"]
+    environment:
+      - DATA_DIR=/data
+    volumes:
+      - directorio_data:/data
+    # --proxy-headers + trust-all-proxies: container is only reachable via Traefik, so
+    # honoring X-Forwarded-* gives the real client IP to the rate-limit/audit guard.
+    command: ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8080",
+              "--proxy-headers", "--forwarded-allow-ips", "*"]
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.directorio.rule=Host(`directorio.example.com`)"
+      - "traefik.http.routers.directorio.entrypoints=websecure"
+      - "traefik.http.routers.directorio.tls.certresolver=letsencrypt"
+      - "traefik.http.services.directorio.loadbalancer.server.port=8080"
+
+  maintainer:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    env_file: .env
+    dns: ["1.1.1.1", "8.8.8.8"]
+    environment:
+      - DATA_DIR=/data
+      - API_RELOAD_URL=http://api:8080/admin/reload
+    volumes:
+      - directorio_data:/data
+    command: ["python", "maintainer/loop.py", "--loop", "--interval", "600"]
+    restart: unless-stopped
+    depends_on:
+      - api
+
+volumes:
+  directorio_data:

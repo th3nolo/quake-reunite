@@ -1,0 +1,28 @@
+# Build context = repo root (compose context: ..). Keep PII, secrets, git, and
+# bulky data OUT of the image. Raw data + outputs live on the /data volume.
+.git
+.gitignore
+.env
+*.env
+**/.env
+**/*.env
+*.key
+.cerebras_key
+.mistral_key
+__pycache__/
+**/__pycache__/
+*.pyc
+*.log
+# PII / outputs / raw material -> mounted at runtime, never baked in
+/markdown
+out/
+ingest/out/
+data/
+SISMO 2026 VZLA/
+.firecrawl/
+# misc
+node_modules/
+.venv/
+venv/
+*.pdf
+*.docx
