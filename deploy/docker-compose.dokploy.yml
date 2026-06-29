@@ -4,18 +4,22 @@
 #
 # Two services share the /data volume: the REST API and the autonomous maintainer.
 #
+# ENV: Dokploy injects the variables you set in the service "Environment" tab by
+# interpolating ${...} below (it does NOT drop a .env next to this file). Set the three
+# secrets in Dokploy: CEREBRAS_API_KEY, OCR_API_KEY, FIRECRAWL_API_KEY. The rest default.
+# (To run a multi-key Cerebras pool instead, set CEREBRAS_API_KEYS=key1,key2 and leave
+# CEREBRAS_API_KEY empty; the code prefers the plural when present.)
+#
 # NETWORKS:
 #   dokploy-network (external, attachable overlay): Dokploy's Traefik docker provider only
 #     discovers containers on THIS network, so the api must join it or it is never routed.
 #   internal (private bridge): maintainer -> api admin reload by service name, off the shared
 #     network so the `api` alias can't collide with another Dokploy app's `api`.
 #
-# BEFORE/AFTER FIRST DEPLOY: seed the volume with the resolved DB (it is PII + gitignored,
-# never baked into the image). After the first deploy creates the volume, run on the VPS:
+# AFTER FIRST DEPLOY: seed the volume with the resolved DB (it is PII + gitignored, never
+# baked into the image). The first deploy creates the volume; then run on the VPS:
 #   deploy/seed-data.sh /root/directorio-seed/directorio.db <project>_directorio_data
 # Otherwise the API serves an empty index until the maintainer rebuilds it from the VR API.
-# .env must include FIRECRAWL_API_KEY/FIRECRAWL_API_URL (see deploy/.env.example) or
-# the firecrawl-driven scraping degrades to plain GET.
 #
 # dns: fast public resolvers as the embedded-DNS UPSTREAM. Service names (api/maintainer)
 # still resolve via the engine's embedded DNS; only EXTERNAL lookups (Cerebras, Firecrawl,
@@ -28,10 +32,19 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    env_file: .env
     dns: ["1.1.1.1", "8.8.8.8"]
     environment:
       - DATA_DIR=/data
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY:-}
+      - CEREBRAS_API_KEYS=${CEREBRAS_API_KEYS:-}
+      - CEREBRAS_MODEL=${CEREBRAS_MODEL:-gemma-4-31b}
+      - CEREBRAS_API_URL=${CEREBRAS_API_URL:-https://api.cerebras.ai/v1/chat/completions}
+      - OCR_API_KEY=${OCR_API_KEY:-}
+      - OCR_API_URL=${OCR_API_URL:-https://api.mistral.ai/v1/ocr}
+      - OCR_MODEL=${OCR_MODEL:-mistral-ocr-latest}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
+      - FIRECRAWL_API_URL=${FIRECRAWL_API_URL:-https://api.firecrawl.dev}
+      - API_RATE_PER_MIN=${API_RATE_PER_MIN:-120}
     volumes:
       - directorio_data:/data
     networks:
@@ -61,11 +74,20 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    env_file: .env
     dns: ["1.1.1.1", "8.8.8.8"]
     environment:
       - DATA_DIR=/data
       - API_RELOAD_URL=http://api:8080/admin/reload
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY:-}
+      - CEREBRAS_API_KEYS=${CEREBRAS_API_KEYS:-}
+      - CEREBRAS_MODEL=${CEREBRAS_MODEL:-gemma-4-31b}
+      - CEREBRAS_API_URL=${CEREBRAS_API_URL:-https://api.cerebras.ai/v1/chat/completions}
+      - OCR_API_KEY=${OCR_API_KEY:-}
+      - OCR_API_URL=${OCR_API_URL:-https://api.mistral.ai/v1/ocr}
+      - OCR_MODEL=${OCR_MODEL:-mistral-ocr-latest}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY:-}
+      - FIRECRAWL_API_URL=${FIRECRAWL_API_URL:-https://api.firecrawl.dev}
+      - MAINTAINER_GEMMA_PRIORITIZE=${MAINTAINER_GEMMA_PRIORITIZE:-}
     volumes:
       - directorio_data:/data
     networks:
