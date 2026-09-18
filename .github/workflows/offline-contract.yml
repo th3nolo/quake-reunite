@@ -33,11 +33,11 @@ jobs:
           uv pip check
       - name: Check source syntax and whitespace
         run: |
-          uv run --no-project --no-sync python -m compileall -q api ingest maintainer pipeline tests
+          uv run --no-project python -m compileall -q api ingest maintainer pipeline tests
           git show --format= --check HEAD
       - name: Run synthetic tests without external network access
         run: |
-          uv run --no-project --no-sync python - <<'PY'
+          uv run --no-project python - <<'PY'
           import socket
           import unittest
           from unittest.mock import patch

@@ -150,7 +150,7 @@ Use Python 3.13.7 and uv 0.11.19 to install the minimal, hash-pinned test enviro
 uv venv --python 3.13.7
 uv pip sync --require-hashes --only-binary :all: --default-index https://pypi.org/simple requirements-test.lock
 uv pip check
-uv run --no-project --no-sync python -m unittest discover -s tests -v
+uv run --no-project python -m unittest discover -s tests -v
 ```
 
 The tests create temporary synthetic OCR records and SQLite databases, exercise parsing,
