@@ -12,6 +12,7 @@ import json
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from html_json import dumps_for_script
 from parse_text import parse_all_text
 from parse_photos import parse_photos
 from resolve import _ci_relation, cluster
@@ -230,17 +231,18 @@ def write_html(people: list[dict], records: list[dict]) -> None:
                     "ci": a["ci"], "age": a["age"], "org": a["origin"],
                     "obs": a["obs"], "date": a["date"]} for a in p["appearances"]],
         })
-    data_json = json.dumps(slim, ensure_ascii=False)
+    data_json = dumps_for_script(slim)
     n_people = len(people)
     n_multi = sum(1 for p in people if p["in_multiple_hospitals"])
     n_records = len(records)
     hospitals = sorted({h for p in people for h in p["hospitals"]})
     page = HTML_TEMPLATE
-    page = page.replace("/*DATA*/", "const PEOPLE = " + data_json + ";")
     page = page.replace("{{N_PEOPLE}}", str(n_people))
     page = page.replace("{{N_RECORDS}}", str(n_records))
     page = page.replace("{{N_MULTI}}", str(n_multi))
     page = page.replace("{{N_HOSP}}", str(len(hospitals)))
+    # Insert data last so template-like strings in records remain unchanged.
+    page = page.replace("/*DATA*/", "const PEOPLE = " + data_json + ";")
     (OUT / "buscador.html").write_text(page, encoding="utf-8")
 
 
