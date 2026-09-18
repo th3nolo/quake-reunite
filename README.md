@@ -144,12 +144,24 @@ an explicit redesign of both exports and API access; lowering the request limit 
 
 ### Verify the public/offline contract
 
-With the application dependencies and `httpx` available in your Python environment, run:
+Use Python 3.13.7 and uv 0.11.19 to install the minimal, hash-pinned test environment:
 
 ```sh
-uv run --no-project python -m unittest discover -s tests -p 'test_public_offline_index.py' -v
+uv venv --python 3.13.7
+uv pip sync --require-hashes --only-binary :all: --default-index https://pypi.org/simple requirements-test.lock
+uv pip check
+uv run --no-project python -m unittest discover -s tests -v
 ```
 
-The tests create a temporary synthetic SQLite database, exercise both exporters and the actual
-ASGI application, and verify that a permitted download includes the full index even when the next
-request is throttled. They do not ingest sources or contact a live deployment.
+The tests create temporary synthetic OCR records and SQLite databases, exercise parsing,
+resolution, both HTML exporters and the actual ASGI application, and verify that a permitted
+download includes the full index even when the next request is throttled. Hostile closing-script
+values must round-trip as data without creating another script element. Retry imports, distinct
+identifiers, empty and missing snapshots, API lookup and invalid limits are also covered.
+
+`.github/workflows/offline-contract.yml` runs this suite on pull requests and `main`, using pinned
+action commits and the frozen test lock. It blocks network connections during test discovery and
+execution and fails on skipped or empty suites. These are synthetic offline checks, not live
+ingestion, browser interaction, or deployment acceptance tests. The test lock covers only imports
+needed by this suite; deployment and optional ingestion dependencies remain in `requirements.txt`
+and `requirements-video.txt`.
