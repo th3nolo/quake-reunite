@@ -9,7 +9,7 @@ household-linked. The maintainer calls this each cycle so the served page stays 
 """
 from __future__ import annotations
 
-import json, sqlite3, sys
+import sqlite3, sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "pipeline"))
 import os  # noqa: E402
 import store_db as db   # noqa: E402
 import build as legacy  # noqa: E402  (reuse HTML_TEMPLATE — identical UX)
+from html_json import dumps_for_script  # noqa: E402
 
 # Write next to the DB (DATA_DIR), so the API serves the same file the maintainer writes.
 OUT = Path(os.environ.get("DATA_DIR", ROOT / "out"))
@@ -62,9 +63,10 @@ def export() -> dict:
     n_hosp = len({h for p in people for h in p["hosp"]})
 
     page = legacy.HTML_TEMPLATE
-    page = page.replace("/*DATA*/", "const PEOPLE = " + json.dumps(people, ensure_ascii=False) + ";")
     page = (page.replace("{{N_PEOPLE}}", str(n_people)).replace("{{N_RECORDS}}", str(n_records))
                 .replace("{{N_MULTI}}", str(n_multi)).replace("{{N_HOSP}}", str(n_hosp)))
+    # Insert data last so template-like strings in records remain unchanged.
+    page = page.replace("/*DATA*/", "const PEOPLE = " + dumps_for_script(people) + ";")
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "buscador.html").write_text(page, encoding="utf-8")
     return {"people": n_people, "records": n_records, "multi": n_multi, "bytes": len(page)}
