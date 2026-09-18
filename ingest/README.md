@@ -43,6 +43,11 @@ python maintainer/loop.py --once         # one maintenance cycle (or --loop --in
 ```
 
 ## REST API
+The public `/buscador` HTML embeds the complete exported person index for offline use. Request
+throttling and audit logging do not prevent bulk downloads. See the
+[public data and offline download model](../README.md#public-data-and-offline-downloads), including
+the difference between collecting from search-only sources and publishing the resolved index.
+
 `/health` · `/stats` · `/persons?ci=&name=&status=&municipality=` · `/persons/{ci}` · `/centers?q=&ctype=&municipality=` · `/review` · `POST /admin/reload`. Per-IP rate limit + audit log (`out/api_audit.log`).
 
 ## Deploy (Contabo VPS via Dokploy)

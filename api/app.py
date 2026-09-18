@@ -2,8 +2,9 @@
 
 Reads the resolved registry live from the SQLite store (WAL: concurrent with the
 maintainer's writes). No giant JSON held in RAM. Read-only. "Show everything"
-policy (full cédula + status), with per-IP rate limit + audit log so the API
-can't be drained as a bulk PII dump.
+policy (full cédula + status). The public /buscador page deliberately embeds the
+complete exported person index for offline use. Per-IP throttling limits request
+frequency, not disclosure or bulk downloading; the audit log is best-effort.
 
   uvicorn api.app:app --host 0.0.0.0 --port 8080
 DB via DB_PATH / DATA_DIR.
@@ -58,6 +59,7 @@ def home():
 
 @app.get("/buscador", include_in_schema=False)
 def buscador():
+    """Public, self-contained index snapshot; one request downloads all exported people."""
     f = WEB_DIR / "buscador.html"
     if f.exists():
         return FileResponse(str(f), media_type="text/html")
@@ -147,11 +149,12 @@ def _zones(conn):
 
 
 def _client_ip(request: Request) -> str:
-    """Real client IP behind Traefik. Trust X-Real-Ip first (Traefik overwrites it
-    with the direct peer, so a client can't spoof it), then the first X-Forwarded-For
-    hop, then the socket peer. The container is only reachable via Traefik (no published
-    port), so these headers are trustworthy here. Without this, the rate-limit + audit
-    guard keys on Traefik's IP and the anti-bulk-PII control is defeated."""
+    """Prefer X-Real-Ip, then the first X-Forwarded-For hop, then the socket peer.
+    This assumes a trusted proxy that overwrites these headers and prevents direct
+    access to the app, as intended by the Traefik deployment. Otherwise clients can
+    choose their throttle/audit identity. This is request throttling, not a
+    bulk-download or confidentiality control.
+    """
     xri = request.headers.get("x-real-ip")
     if xri:
         return xri.strip()

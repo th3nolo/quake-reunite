@@ -95,7 +95,7 @@ DATA_DIR=./out uvicorn api.app:app --host 0.0.0.0 --port 8080   # API + maps
 python maintainer/loop.py --loop --interval 600                 # keep the index live
 ```
 
-Open `http://localhost:8080/mapa3d` for the 3D map, `/` for the offline search page, `/salud` for
+Open `http://localhost:8080/` (or `/mapa3d`) for the 3D map, `/buscador` for the offline search page, `/salud` for
 observability, and `/docs` for the API.
 
 ## Deploy
@@ -109,3 +109,47 @@ does not have to re-ingest from scratch).
 This is real disaster data. No PII and no API keys are in this repository. The resolved database,
 source photos, and scraped material are gitignored and mounted at runtime. Example cédulas and names
 in the code are fictional. Keys come from environment variables only.
+
+### Public data and offline downloads
+
+The current application deliberately publishes its resolved person index. Keeping the database
+and generated files out of Git does **not** make the running service private.
+
+* `/buscador` serves a self-contained HTML snapshot with **every exported person embedded**,
+  including full cédulas, names, statuses, hospitals, origins, and source appearances when present.
+  One successful request downloads the index; saving that HTML supports offline searching.
+  The browser's 80-result display cap limits the visible list, not the data in the file.
+* `pipeline/build_db.py` exports the full resolved SQLite person index to
+  `DATA_DIR/buscador.html`; the maintainer regenerates it each cycle. The API serves
+  `WEB_DIR/buscador.html` (`WEB_DIR` defaults to the database directory). The legacy
+  `pipeline/build.py` embeds all people supplied to it and also writes `out/people.json`,
+  `out/records.csv`, and `out/revision.md`. These extra files are local outputs, not routes
+  exposed by this API. The HTML is a compact snapshot, not a copy of every database column;
+  for example, the database exporter omits raw rows and observation text.
+* `/persons`, `/persons/{ci}`, and `/review` also expose person data without authentication.
+  API result limits bound individual responses; they do not establish confidentiality.
+
+`API_RATE_PER_MIN` (default 120) limits requests per IP in a rolling 60-second window within
+each API process, including requests for `/buscador`. It does not limit the number of records
+in an HTML response, prevent bulk downloads, or revoke saved copies. Counters reset on restart
+and are not shared across workers. Forwarded IP headers require a trusted proxy that overwrites
+them and blocks direct access to the app; clients can otherwise choose their throttle identity.
+The best-effort audit log records accepted requests (including IP and query string), not offline
+use, and log-write failures do not block responses. Treat that log as sensitive too.
+
+The ingestion policy for search-only external registries concerns how records are collected;
+it is not a restriction on downloading records once they enter this public index. Deploy this
+model only with records intended for public distribution. A restricted-data deployment needs
+an explicit redesign of both exports and API access; lowering the request limit is insufficient.
+
+### Verify the public/offline contract
+
+With the application dependencies and `httpx` available in your Python environment, run:
+
+```sh
+uv run --no-project python -m unittest discover -s tests -p 'test_public_offline_index.py' -v
+```
+
+The tests create a temporary synthetic SQLite database, exercise both exporters and the actual
+ASGI application, and verify that a permitted download includes the full index even when the next
+request is throttled. They do not ingest sources or contact a live deployment.
