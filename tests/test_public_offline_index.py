@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 
 from pipeline import build_db
 from api import app as api
+from pipeline.parse_photos import parse_photos
+from test_html_exports import Scripts
 
 
 COUNT = 205  # Exceeds both the HTML display cap (80) and /persons response cap (200).
@@ -32,6 +34,7 @@ class PublicOfflineIndexTests(unittest.TestCase):
             (api, "AUDIT_LOG", self.root / "audit.log"),
             (api, "RATE_PER_MIN", 1),
             (api, "_hits", api.defaultdict(api.deque)),
+            (api, "_ZONES", None),
         ):
             self.enterContext(patch.object(obj, name, value))
         self.client = self.enterContext(TestClient(api.app))
@@ -113,6 +116,66 @@ class PublicOfflineIndexTests(unittest.TestCase):
         build_db.legacy.write_html(people, [])
         page = (self.root / "buscador.html").read_text(encoding="utf-8")
         self.assert_complete_index(embedded_people(page))
+
+    def test_synthetic_import_resolves_exports_and_serves_hostile_value_as_data(self):
+        hostile = '</script><script id="synthetic-marker">alert(1)</script>'
+        source = self.root / "synthetic-ocr.json"
+        source.write_text(json.dumps({"images": [{
+            "file": "synthetic-2026-01-01.png", "hospital": hostile,
+            "rows": [
+                {"apellidos": "SYNTHETIC", "nombres": "FIXTURE",
+                 "ci": ci, "edad": "42", "estado": "ingresado"}
+                for ci in ("99900001", "88800002")
+            ],
+        }]}), encoding="utf-8")
+        records = parse_photos(source)
+        self.assertEqual(len(records), 2)
+        conn = build_db.db.connect()
+        try:
+            with conn:
+                ids = [build_db.db.add_record(conn, row) for row in records]
+                repeated = [build_db.db.add_record(conn, row) for row in records]
+            # Same names with different identifiers stay separate; retries add no rows.
+            self.assertNotEqual(ids[0], ids[1])
+            self.assertEqual(repeated, ids)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM records").fetchone()[0], 2)
+            api._geo.ensure_zones(conn)
+            api._hh.rebuild(conn)
+        finally:
+            conn.close()
+
+        result = build_db.export()
+        self.assertEqual((result["people"], result["records"]), (2, 2))
+        with patch.object(api, "RATE_PER_MIN", 20):
+            response = self.client.get("/buscador")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(Scripts(response.text).scripts), 1)
+            people = embedded_people(response.text)
+            self.assertEqual({ci for p in people for ci in p["ci"]},
+                             {"99900001", "88800002"})
+            for person in people:
+                self.assertEqual(person["hosp"], [hostile])
+                self.assertEqual(person["ap"][0]["h"], hostile)
+                self.assertEqual(person["st"], ["ingresado"])
+            listing = self.client.get("/persons", params={"name": "synthetic"})
+            self.assertEqual(listing.status_code, 200)
+            self.assertEqual(listing.json()["count"], 2)
+            detail = self.client.get("/persons/99900001")
+            self.assertEqual(detail.status_code, 200)
+            self.assertEqual(detail.json()["hospitals"], [hostile])
+            self.assertEqual(detail.json()["n_records"], 1)
+            self.assertEqual(self.client.get("/persons/77700003").status_code, 404)
+            self.assertEqual(self.client.get("/persons?limit=201").status_code, 422)
+
+    def test_empty_database_exports_a_searchable_empty_snapshot(self):
+        build_db.db.connect().close()
+        result = build_db.export()
+        self.assertEqual((result["people"], result["records"]), (0, 0))
+        response = self.client.get("/buscador")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(embedded_people(response.text), [])
+        self.assertEqual(len(Scripts(response.text).scripts), 1)
+        self.assertIn("function run()", response.text)
 
 
 if __name__ == "__main__":
